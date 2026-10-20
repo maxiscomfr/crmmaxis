@@ -539,21 +539,73 @@ async function sbFetch(path,opts={},retry=true){
   return t?JSON.parse(t):null;
 }
 async function sbSendLink(email){
-  const r=await fetch(SB.url+"/auth/v1/otp",{method:"POST",headers:{apikey:SB.key,"Content-Type":"application/json"},body:JSON.stringify({email,create_user:false,options:{emailRedirectTo:location.origin+location.pathname}})});
+  const r=await fetch(SB.url+"/auth/v1/otp",{method:"POST",headers:{apikey:SB.key,"Content-Type":"application/json"},body:JSON.stringify({email,create_user:false})});
+  if(!r.ok){const e=new Error("HTTP "+r.status);e.status=r.status;throw e}
+}
+async function sbVerifyCode(email,token){
+  const r=await fetch(SB.url+"/auth/v1/verify",{method:"POST",headers:{apikey:SB.key,"Content-Type":"application/json"},body:JSON.stringify({type:"email",email,token})});
   if(!r.ok)throw new Error("HTTP "+r.status);
+  const j=await r.json();
+  sbSave({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+j.expires_in*1000});
 }
 function demandes(){
   return `<h1>Demandes</h1>
   <p class="lede">Les messages envoyés depuis le formulaire de MAXIS.com. Crée une fiche pour les reprendre dans le CRM.</p>
+  <div id="push"></div>
   <div id="dem"></div>`;
 }
+let sbCodeSent=false, sbMail="maxiscomfr@gmail.com";
 function sbLoginHtml(msg=""){
   return `<div class="box"><p class="label">Connexion</p>
-    <p class="muted" style="margin:0">${msg||"Reçois un lien de connexion par email pour afficher les demandes."}</p>
-    <div class="inline"><label class="f"><span class="label">Email</span><input id="sb-mail" type="email" value="maxiscomfr@gmail.com" autocomplete="email"></label>
-    <button class="btn acc" data-act="sbLogin">Recevoir le lien</button></div></div>`;
+    <p class="muted" style="margin:0">${msg||"Reçois un code par email pour afficher les demandes."}</p>
+    ${sbCodeSent?`<div class="inline"><label class="f"><span class="label">Code reçu par email</span><input id="sb-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></label>
+      <button class="btn acc" data-act="sbVerify">Valider le code</button></div>
+      <p style="margin:0"><button class="btn ghost sm" data-act="sbLogin">Renvoyer un code</button></p>`
+    :`<div class="inline"><label class="f"><span class="label">Email</span><input id="sb-mail" type="email" value="maxiscomfr@gmail.com" autocomplete="email"></label>
+      <button class="btn acc" data-act="sbLogin">Recevoir le code</button></div>`}
+  </div>`;
+}
+const PUSH_KEY="BH7df1pqOeWEYhK6l6ueBYLZUBBy3V8obf-2AWj-xhTcQlzfgBQaSIgs2sVCeLBAtQnMeBzhilKTiCFUiAv66ZY";
+function pushSupported(){return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window}
+function b64uToU8(s){const p="=".repeat((4-s.length%4)%4),b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0))}
+async function pushStatus(){
+  if(!pushSupported())return "unsupported";
+  try{
+    const reg=await navigator.serviceWorker.getRegistration();
+    const sub=reg&&await reg.pushManager.getSubscription();
+    if(sub)return "on";
+  }catch(_){return "unsupported"}
+  return Notification.permission==="denied"?"denied":"off";
+}
+async function paintPush(){
+  const b=$("#push");if(!b)return;
+  const st=await pushStatus();
+  const msg={
+    unsupported:"Ce navigateur ne gère pas les notifications. Sur iPhone, installe d'abord l'app sur l'écran d'accueil (Partager → Sur l'écran d'accueil), puis ouvre-la depuis cet icône.",
+    denied:"Les notifications sont bloquées pour ce site dans les réglages du navigateur.",
+    on:"Notifications activées sur cet appareil. Tu reçois une alerte à chaque nouvelle demande.",
+    off:"Reçois une notification sur cet appareil à chaque nouvelle demande."
+  }[st];
+  b.innerHTML=`<div class="box"><p class="muted" style="margin:0">${msg}</p>${st==="off"?`<p style="margin:10px 0 0"><button class="btn acc sm" data-act="pushOn">Activer les notifications</button></p>`:""}</div>`;
+}
+async function pushOn(){
+  if(!pushSupported()){toast("Notifications indisponibles ici. Installe l'app sur l'écran d'accueil.");return}
+  if(!sbSession()){toast("Connecte-toi d'abord");return}
+  const perm=await Notification.requestPermission();
+  if(perm!=="granted"){toast("Notifications refusées");paintPush();return}
+  try{
+    const reg=await navigator.serviceWorker.register("sw.js");
+    await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToU8(PUSH_KEY)});
+    const j=sub.toJSON();
+    await sbFetch("/rest/v1/push_abonnements?on_conflict=endpoint",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth})});
+    toast("Notifications activées sur cet appareil");
+  }catch(e){toast("Activation impossible : "+e.message)}
+  paintPush();
 }
 async function paintDemandes(){
+  paintPush();
   const box=$("#dem");if(!box)return;
   if(!sbSession()){box.innerHTML=sbLoginHtml();return}
   box.innerHTML=`<p class="label">Chargement…</p>`;
@@ -952,9 +1004,11 @@ async function act(a,el,e){
       if(modal)paintModal();
       break;
     case "saveReglages": await saveReglages(); break;
-    case "sbLogin": {const m=($("#sb-mail")?.value||"").trim();if(!m){toast("Indique ton email");break}try{await sbSendLink(m);toast("Lien envoyé. Ouvre-le sur cet appareil.")}catch(err){toast("Envoi impossible : "+err.message)}break}
+    case "sbLogin": {const m=($("#sb-mail")?.value||"maxiscomfr@gmail.com").trim();try{await sbSendLink(m);sbCodeSent=true;sbMail=m;toast("Code envoyé par email");paintDemandes()}catch(err){toast(err.status===429?"Trop de demandes. Attends 5 minutes puis réessaie une seule fois.":"Envoi impossible : "+err.message)}break}
+    case "sbVerify": {const c=($("#sb-code")?.value||"").replace(/\s/g,"");if(!c){toast("Saisis le code reçu");break}try{await sbVerifyCode(sbMail,c);sbCodeSent=false;toast("Connecté");paintDemandes()}catch(err){toast("Code refusé ou expiré. Demande-en un nouveau.")}break}
     case "sbLogout": sbSave(null); paintDemandes(); break;
     case "convertDemande": await convertDemande(el.dataset.id); break;
+    case "pushOn": await pushOn(); break;
     case "ignoreDemande": await ignoreDemande(el.dataset.id); break;
     case "exportAll": exportAll(); break;
   }

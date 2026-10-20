@@ -32,7 +32,8 @@ Un site Netlify est public : toute personne qui connaît l'adresse peut ouvrir l
 - Fiches entreprises : contacts, échanges, affaires, devis et factures, documents.
 - Devis et factures : numérotation automatique, lignes détaillées (désignation, détail, quantité, prix HT), remise client en pourcentage, acompte et solde calculés depuis l'affaire, impression au format du devis MAXIS.
 - Remise client : pourcentage saisi sur la fiche entreprise, repris automatiquement sur chaque nouveau devis ou facture (modifiable).
-- Demandes du site : onglet « Demandes », connexion par lien magique, création de fiche depuis une demande. Les demandes viennent de la table `demandes` du projet Supabase (schéma dans `supabase/schema.sql`).
+- Demandes du site : onglet « Demandes », connexion par code reçu par email, création de fiche depuis une demande. Les demandes viennent de la table `demandes` du projet Supabase (schéma dans `supabase/schema.sql`).
+- Notifications push sur téléphone (application installée sur l'écran d'accueil) à chaque nouvelle demande : service worker `sw.js` et fonction `supabase/functions/notify-demande`.
 - Icônes : favicon, icône d'application (écran d'accueil iPhone et Android) et manifeste web.
 - Documents : bibliothèque par catégorie, rattachement à une entreprise.
 - Raccourcis : Échap ferme une fiche ; le bouton Thème règle clair, sombre ou automatique.

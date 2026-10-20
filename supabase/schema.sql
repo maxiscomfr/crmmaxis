@@ -33,3 +33,19 @@ create policy "Martin met à jour les demandes"
   with check (auth.email() = 'maxiscomfr@gmail.com');
 
 create index if not exists demandes_created_at_idx on public.demandes (created_at desc);
+
+-- Notifications push : appareils de Martin (écriture et lecture réservées à son compte connecté).
+create table if not exists public.push_abonnements (
+  endpoint text primary key,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.push_abonnements enable row level security;
+
+create policy "Martin gère ses appareils"
+  on public.push_abonnements for all
+  to authenticated
+  using (auth.email() = 'maxiscomfr@gmail.com')
+  with check (auth.email() = 'maxiscomfr@gmail.com');
