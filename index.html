@@ -1,5 +1,18 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>CRM MAXIS</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#0A0A0A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MAXIS">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Tokens: Encre, Papier, Signal, Béton, Filet (charte MAXIS). */
@@ -131,6 +144,16 @@ tbody tr:hover td{background:var(--hover)}
 .toast{background:var(--fg);color:var(--bg);padding:12px 16px;font-size:13px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .foot{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* Devis & factures : lignes et totaux */
+.line{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.4fr) 76px 110px 110px auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.line input{padding:8px 9px}
+.line .lm{text-align:right;white-space:nowrap}
+.line-h{padding:0 0 6px;border-bottom:1px solid var(--fg)}
+.line-h .lm{text-align:right}
+.tots{display:grid;gap:8px;max-width:420px;margin-left:auto}
+.tots .tr{display:flex;justify-content:space-between;gap:20px;align-items:baseline}
+.tots .big{font-weight:900;font-stretch:75%;font-size:22px;border-top:2px solid var(--fg);padding-top:10px;margin-top:4px}
+@media (max-width:699px){.line{grid-template-columns:1fr 1fr}.line .ldet{grid-column:1/-1}.line-h{display:none}.line .lm{text-align:left}.line button{justify-self:start}}
 </style>
 
 <header class="top">
@@ -163,6 +186,7 @@ const PRESTATIONS=["Mini-audit gratuit","Audit complet","Correction de site","Cr
 const STATUT_AFF=["En négociation","Gagnée","Perdue"];
 const TYPES_FAC=["Devis","Facture d'acompte (30 %)","Facture de solde (70 %)","Facture"];
 const STATUT_FAC=["Brouillon","Envoyée","Payée"];
+const REGL_DEF={raison:"MAXIS.com",adresse:"2 place Louvois, 37100 Tours",siret:"938 105 533 00013",email:"maxiscomfr@gmail.com",tel:"07 45 51 79 65",statut:"Entrepreneur individuel (micro-entreprise)",rcs:"Non inscrit au RCS",tvaMention:"TVA non applicable, art. 293 B du CGI"};
 const CATS_DOC=["Devis","Facture","Audit","CGV / contrat","Visuel / logo","Charte graphique","Plaquette","Rendu client","Autre"];
 const COLS=["entreprises","contacts","activites","affaires","factures","documents","reglages"];
 const ACCEPT_ARTIFACT=".pdf,.png,.jpg,.jpeg,.webp,.gif,.svg,.mp4,.webm,.woff2,.woff,.ttf,.otf,.csv,.md,.txt,.json";
@@ -456,7 +480,7 @@ function docCard(d){
 }
 
 function reglages(){
-  const r=S.reglages.get("maxis")||{};
+  const r={...REGL_DEF,...(S.reglages.get("maxis")||{})};
   const f=(n,l,v="",type="text")=>`<label class="f"><span class="label">${l}</span><input id="r-${n}" type="${type}" value="${esc(v)}"></label>`;
   return `<h1>Réglages</h1>
   <p class="lede">Ces informations apparaissent sur les devis et factures imprimés.</p>
@@ -465,6 +489,7 @@ function reglages(){
       ${f("raison","Raison sociale",r.raison||"")}${f("siret","SIRET",r.siret||"")}
       ${f("adresse","Adresse",r.adresse||"")}${f("email","Email",r.email||"","email")}
       ${f("tel","Téléphone",r.tel||"","tel")}
+      ${f("statut","Statut juridique",r.statut||"")}${f("rcs","Immatriculation",r.rcs||"")}
       <label class="f full"><span class="label">Mention TVA / conditions</span><textarea id="r-tva" placeholder="Ex. : TVA non applicable, article 293 B du CGI (à confirmer)">${esc(r.tvaMention||"")}</textarea></label>
     </div>
     <p style="margin-top:14px"><button class="btn acc" data-act="saveReglages">Enregistrer</button></p>
@@ -482,7 +507,7 @@ function reglages(){
 const fld=(n,l,v="",type="text",extra="")=>{const id=/-/.test(n)?n:"f-"+n;return `<label class="f"><span class="label">${l}</span><input id="${id}" type="${type}" value="${esc(v)}" ${extra}></label>`};
 const sel=(n,l,opts,v)=>`<label class="f"><span class="label">${l}</span><select id="f-${n}">${opts.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select></label>`;
 
-function openModal(kind,id=null){modal={kind,id};paintModal();setTimeout(()=>{const first=document.querySelector(".sheet input,.sheet select");first&&first.focus()},30)}
+function openModal(kind,id=null){modal={kind,id};paintModal();if(kind==="fac")addLineRow({qte:1,pu:""});setTimeout(()=>{const first=document.querySelector(".sheet input,.sheet select");first&&first.focus()},30)}
 function closeModal(){modal=null;$("#modal").innerHTML=""}
 function paintModal(){
   if(!modal){$("#modal").innerHTML="";return}
@@ -502,6 +527,7 @@ function coHtml(id){
       ${fld("telephone","Téléphone",c.telephone||"","tel")}${fld("email","Email",c.email||"","email")}
       <div class="full">${fld("adresse","Adresse postale",c.adresse||"")}</div>
       ${fld("source","Source",c.source||"Prospection PME")}
+      ${fld("remise","Remise client (%)",c.remise??0,"number",'min="0" max="100" step="0.5"')}
       ${sel("statut","Étape",STATUTS,c.statut||"Nouveau")}
       ${sel("signal","Signal web",SIGNAUX,c.signal||SIGNAUX[0])}
       ${fld("prochaineAction","Prochaine action",c.prochaineAction||"")}
@@ -560,13 +586,91 @@ function facHtml(){
   return `<div class="sheet-h"><h2>Nouveau devis ou facture</h2><button class="btn ghost sm" data-act="close">Fermer</button></div>
   <div class="form two" style="margin-top:14px">
     <label class="f"><span class="label">Type</span><select id="fa-type" data-chg="calcFac">${TYPES_FAC.map(t=>`<option>${t}</option>`).join("")}</select></label>
-    <label class="f"><span class="label">Entreprise *</span><select id="fa-co"><option value="">Choisir</option>${cos.map(c=>`<option value="${c.id}">${esc(c.nom)}</option>`).join("")}</select></label>
-    <label class="f full"><span class="label">Affaire (remplit l'entreprise et le montant)</span><select id="fa-aff" data-chg="calcFac"><option value="">Aucune</option>${affs.map(a=>`<option value="${a.id}" data-co="${a.entrepriseId}" data-m="${a.montant}">${esc(coName(a.entrepriseId))} — ${esc(a.prestation)} (${fmtEur(a.montant)})</option>`).join("")}</select></label>
-    ${fld("fa-montant","Montant HT (€) *","","number",'min="0" step="0.01"')}
+    <label class="f"><span class="label">Entreprise *</span><select id="fa-co" data-chg="coPick"><option value="">Choisir</option>${cos.map(c=>`<option value="${c.id}" data-remise="${Number(c.remise)||0}">${esc(c.nom)}</option>`).join("")}</select></label>
+    <label class="f full"><span class="label">Affaire (pré-remplit les lignes, ou sert de base à l'acompte et au solde)</span><select id="fa-aff" data-chg="affPick"><option value="">Aucune</option>${affs.map(a=>`<option value="${a.id}" data-co="${a.entrepriseId}" data-m="${Number(a.montant)||0}" data-p="${esc(a.prestation)}">${esc(coName(a.entrepriseId))} — ${esc(a.prestation)} (${fmtEur(a.montant)})</option>`).join("")}</select></label>
+    <label class="f"><span class="label">Date</span><input id="fa-date" type="date" value="${today()}"></label>
     <label class="f"><span class="label">Statut</span><select id="fa-statut">${STATUT_FAC.map(s=>`<option>${s}</option>`).join("")}</select></label>
-    ${fld("fa-date","Date",today(),"date")}
   </div>
+  <div class="sec" id="sec-lignes"><p class="label">Détail de la prestation</p>
+    <div class="line line-h"><span class="label">Désignation</span><span class="label">Détail</span><span class="label">Qté</span><span class="label">Prix HT</span><span class="label lm">Montant</span><span></span></div>
+    <div id="lignes"></div>
+    <p style="margin-top:10px"><button class="btn ghost sm" data-act="addLine">+ Ajouter une ligne</button></p>
+    <label class="f" style="margin-top:16px;max-width:240px"><span class="label">Remise client (%)</span><input id="fa-remise" type="number" min="0" max="100" step="0.5" value="0"></label>
+  </div>
+  <div class="sec"><p class="label">Totaux</p><div class="tots" id="totaux"></div></div>
   <p style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn acc" data-act="saveFac">Créer le document</button><button class="btn ghost" data-act="close">Annuler</button></p>`;
+}
+function lineRow(l={}){
+  const d=document.createElement("div");d.className="line";
+  d.innerHTML=`<input class="ld" aria-label="Désignation" placeholder="Désignation" value="${esc(l.designation||"")}">
+    <input class="ldet" aria-label="Détail" placeholder="Détail (facultatif)" value="${esc(l.detail||"")}">
+    <input class="lq" type="number" min="0" step="0.5" aria-label="Quantité" value="${l.qte??1}">
+    <input class="lpu" type="number" min="0" step="0.01" aria-label="Prix unitaire HT" placeholder="0,00" value="${l.pu??""}">
+    <span class="lm num">${fmtEur((l.qte??1)*(l.pu||0))}</span>
+    <button class="btn ghost sm" data-act="delLine" aria-label="Retirer la ligne">Retirer</button>`;
+  return d;
+}
+function readLines(){
+  return [...document.querySelectorAll("#lignes .line")].map(r=>({designation:r.querySelector(".ld").value.trim(),detail:r.querySelector(".ldet").value.trim(),qte:Number(r.querySelector(".lq").value)||0,pu:Number(r.querySelector(".lpu").value)||0})).filter(l=>l.designation||l.pu);
+}
+function updTotaux(){
+  const box=$("#totaux");if(!box||modal?.kind!=="fac")return;
+  const type=$("#fa-type").value,isAc=/acompte|solde/i.test(type);
+  const pct=type.includes("30")?30:type.includes("70")?70:100;
+  $("#fa-remise").disabled=isAc;
+  $("#sec-lignes").hidden=isAc;
+  document.querySelectorAll("#lignes .line").forEach(r=>{r.querySelector(".lm").textContent=fmtEur((Number(r.querySelector(".lq").value)||0)*(Number(r.querySelector(".lpu").value)||0))});
+  if(isAc){
+    const o=$("#fa-aff").selectedOptions[0];
+    const base=Number(o?.dataset.m)||0,montant=Math.round(base*pct)/100;
+    box.innerHTML=`<div class="tr"><span>Base HT de l'affaire</span><span class="num">${fmtEur(base)}</span></div>
+      <div class="tr"><span>${pct} % de la base</span><span class="num">${fmtEur(montant)}</span></div>
+      <div class="tr big"><span>Montant HT</span><span class="num">${fmtEur(montant)}</span></div>`;
+    return;
+  }
+  const brut=readLines().reduce((s,l)=>s+l.qte*l.pu,0);
+  const rp=Math.min(100,Math.max(0,Number($("#fa-remise").value)||0));
+  const remise=Math.round(brut*rp)/100,montant=Math.round((brut-remise)*100)/100;
+  box.innerHTML=`<div class="tr"><span>Sous-total HT</span><span class="num">${fmtEur(brut)}</span></div>
+    ${remise>0?`<div class="tr"><span>Remise client ${rp} %</span><span class="num">− ${fmtEur(remise)}</span></div>`:""}
+    <div class="tr big"><span>Total HT</span><span class="num">${fmtEur(montant)}</span></div>`;
+}
+function addLineRow(l){$("#lignes").appendChild(lineRow(l));updTotaux()}
+function coPick(){const o=$("#fa-co").selectedOptions[0];if(o&&o.value)$("#fa-remise").value=o.dataset.remise||0;updTotaux()}
+function affPick(){
+  const o=$("#fa-aff").selectedOptions[0];
+  if(o&&o.value){
+    $("#fa-co").value=o.dataset.co;coPick();
+    if(!/acompte|solde/i.test($("#fa-type").value)){$("#lignes").innerHTML="";$("#lignes").appendChild(lineRow({designation:o.dataset.p,qte:1,pu:Number(o.dataset.m)||0}))}
+  }
+  updTotaux();
+}
+function calcFac(){updTotaux()}
+async function saveFac(){
+  const type=$("#fa-type").value,entrepriseId=$("#fa-co").value,isAc=/acompte|solde/i.test(type);
+  if(!entrepriseId){toast("Choisis l'entreprise");return}
+  const affOpt=$("#fa-aff").selectedOptions[0],affaireId=affOpt?.value||null;
+  let lignes,brut,remisePct=0,remise=0,montant,base=null,pct=null;
+  if(isAc){
+    if(!affaireId){toast("Choisis l'affaire : l'acompte et le solde se calculent dessus");return}
+    pct=type.includes("30")?30:70;
+    base=Number(affOpt.dataset.m)||0;
+    montant=Math.round(base*pct)/100;
+    if(!(montant>0)){toast("Cette affaire n'a pas de montant");return}
+    const label=type.startsWith("Facture d'acompte")?"Acompte":"Solde";
+    lignes=[{designation:`${label} ${pct} % — ${affOpt.dataset.p}`,detail:"",qte:1,pu:montant}];
+    brut=montant;
+  }else{
+    lignes=readLines();
+    if(!lignes.length){toast("Ajoute au moins une ligne");return}
+    brut=lignes.reduce((s,l)=>s+l.qte*l.pu,0);
+    remisePct=Math.min(100,Math.max(0,Number($("#fa-remise").value)||0));
+    remise=Math.round(brut*remisePct)/100;
+    montant=Math.round((brut-remise)*100)/100;
+    if(!(montant>0)){toast("Le montant doit être supérieur à 0");return}
+  }
+  await put("factures",uid(),{numero:nextNumero(type),type,entrepriseId,affaireId,date:$("#fa-date").value||today(),statut:$("#fa-statut").value,lignes,brut:Math.round(brut*100)/100,remisePct,remise,montant,base,pct});
+  closeModal();toast("Document créé");
 }
 
 /* ============ Actions ============ */
@@ -575,7 +679,7 @@ async function saveCo(){
   const nom=g("nom");
   if(!nom){toast("Le nom de l'entreprise est obligatoire");$("#f-nom")?.focus();return}
   const id=modal.id||uid(),prev=S.entreprises.get(id)||{};
-  await put("entreprises",id,{...prev,nom,secteur:g("secteur"),ville:g("ville"),site:g("site"),telephone:g("telephone"),email:g("email"),adresse:g("adresse"),source:g("source"),statut:g("statut"),signal:g("signal"),prochaineAction:g("prochaineAction"),dateProchaineAction:g("dateProchaineAction"),notes:$("#f-notes").value,creeLe:prev.creeLe||today(),misAJour:today()});
+  await put("entreprises",id,{...prev,nom,secteur:g("secteur"),ville:g("ville"),site:g("site"),telephone:g("telephone"),email:g("email"),adresse:g("adresse"),source:g("source"),remise:Math.min(100,Math.max(0,Number(g("remise"))||0)),statut:g("statut"),signal:g("signal"),prochaineAction:g("prochaineAction"),dateProchaineAction:g("dateProchaineAction"),notes:$("#f-notes").value,creeLe:prev.creeLe||today(),misAJour:today()});
   modal.id=id;toast("Fiche enregistrée");paintModal();
 }
 async function delCo(id){
@@ -600,39 +704,84 @@ async function addAff(){
   await put("affaires",uid(),{entrepriseId:modal.id,prestation:$("#af-prest").value,montant,statut:$("#af-statut").value,date:today()});
   paintModal();
 }
-async function saveFac(){
-  const type=$("#fa-type").value,entrepriseId=$("#fa-co").value,montant=Number($("#fa-montant").value);
-  if(!entrepriseId){toast("Choisis l'entreprise");return}
-  if(!(montant>0)){toast("Indique un montant HT supérieur à 0");return}
-  const affaireId=$("#fa-aff").value||null;
-  const id=uid();
-  await put("factures",id,{numero:nextNumero(type),type,entrepriseId,affaireId,montant,statut:$("#fa-statut").value,date:$("#fa-date").value||today()});
-  closeModal();toast("Document créé");
-}
-function calcFac(){
-  const s=$("#fa-aff"),opt=s.options[s.selectedIndex];
-  if(!opt||!opt.value)return;
-  $("#fa-co").value=opt.dataset.co;
-  const t=$("#fa-type").value,m=Number(opt.dataset.m);
-  const pct=t.includes("30")?0.3:t.includes("70")?0.7:1;
-  $("#fa-montant").value=(Math.round(m*pct*100)/100).toString();
-}
 function printFac(id){
   const f=S.factures.get(id);if(!f)return;
-  const r=S.reglages.get("maxis")||{},c=co(f.entrepriseId)||{},a=f.affaireId?S.affaires.get(f.affaireId):null;
-  const part=f.type.includes("acompte")?" — acompte 30 %":f.type.includes("solde")?" — solde 70 %":"";
-  const title=f.type.split(" (")[0];
+  const r={...REGL_DEF,...(S.reglages.get("maxis")||{})},c=co(f.entrepriseId)||{};
+  const isDevis=f.type.startsWith("Devis"),isAc=/acompte|solde/i.test(f.type);
+  const lignes=f.lignes?.length?f.lignes:[{designation:"Prestation",qte:1,pu:f.montant}];
+  const brut=f.brut??lignes.reduce((s,l)=>s+l.qte*l.pu,0);
+  const remise=f.remise||0,montant=f.montant;
+  const title=isDevis?"Devis":f.type.startsWith("Facture d'acompte")?"Facture d'acompte":f.type.startsWith("Facture de solde")?"Facture de solde":"Facture";
+  const siren=(r.siret||"").replace(/\s/g,"").slice(0,9).replace(/^(\d{3})(\d{3})(\d{3})$/,"$1 $2 $3");
+  const dateFr=new Date((f.date||today())+"T12:00:00").toLocaleDateString("fr-FR");
+  const acompte=Math.round(montant*30)/100,solde=Math.round((montant-acompte)*100)/100;
+  const lignesAdr=s=>(s||"").split(",").map(x=>esc(x.trim())).filter(Boolean).join("<br>");
+  const mark=`<svg viewBox="0 0 100 100" aria-hidden="true"><path fill="#FF4D1A" d="M0 0h23v6h-17v17h-6zM100 0v23h-6v-17h-17v-6zM100 100h-23v-6h17v-17h6zM0 100v-23h6v17h17v6z"/><path fill="#F4F3EF" transform="translate(25.29 73)" d="M0.47 0 17.01 -24.24 2.08 -46H16.61L25.04 -32.61H25.38L33.81 -46H47.41L32.41 -24.24L48.95 0H34.35L24.37 -15.87H24.04L14.06 0Z"/></svg>`;
+  const mod=isDevis?`<p class="mod"><strong>Modalités de paiement :</strong> acompte de 30 % (${fmtEur(acompte)}) à la commande, solde de 70 % (${fmtEur(solde)}) à la livraison. Paiement par virement bancaire.</p>`
+    :`<p class="mod"><strong>Modalités de paiement :</strong> paiement par virement bancaire.</p>`;
   const html=`<!doctype html><html lang="fr"><meta charset="utf-8"><title>${esc(f.numero)}</title>
-<style>body{font:15px/1.5 system-ui,sans-serif;margin:48px;color:#0A0A0A}h1{font-size:40px;margin:0;text-transform:uppercase;letter-spacing:-.01em}table{width:100%;border-collapse:collapse;margin-top:28px}td,th{border-bottom:1px solid #DCDBD6;padding:12px 10px;text-align:left}th{font-size:12px;text-transform:uppercase;color:#6B6B66}.r{text-align:right}.tot td{font-size:18px;font-weight:700;border-bottom:2px solid #0A0A0A}small{color:#6B6B66}.box{margin-top:32px;display:flex;justify-content:space-between;gap:24px}</style>
-<body><h1>${esc(title)}</h1><p><strong>${esc(f.numero)}</strong> · ${fmtDate(f.date)}</p>
-<div class="box"><div><strong>${esc(r.raison||"Raison sociale à compléter")}</strong><br><small>${esc(r.adresse||"")}${r.siret?"<br>SIRET "+esc(r.siret):""}${r.email?"<br>"+esc(r.email):""}${r.tel?" · "+esc(r.tel):""}</small></div>
-<div><strong>Client</strong><br>${esc(c.nom||"")}<br><small>${esc(c.adresse||"")}</small></div></div>
-<table><thead><tr><th>Désignation</th><th class="r">Montant HT</th></tr></thead>
-<tbody><tr><td>${esc(a?a.prestation:"Prestation")}${esc(part)}</td><td class="r">${fmtEur(f.montant)}</td></tr>
-<tr class="tot"><td>Total</td><td class="r">${fmtEur(f.montant)}</td></tr></tbody></table>
-<p><small>${esc(r.tvaMention||"")}</small></p>
-${f.type.startsWith("Devis")?"<p><small>Devis valable 30 jours.</small></p>":""}
-<script>window.addEventListener("load",()=>setTimeout(()=>print(),150))<\/script></body></html>`;
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+@page{size:A4;margin:14mm 14mm 30mm;@bottom-right{content:counter(page);font:500 9px "IBM Plex Mono",monospace;color:#0A0A0A}}
+*{box-sizing:border-box}
+body{margin:0;font:12px/1.5 Archivo,Helvetica,Arial,sans-serif;color:#0A0A0A;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.band{background:#0A0A0A;color:#F4F3EF;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:20px 24px;border-bottom:4px solid #FF4D1A}
+.lockup{display:flex;align-items:center;gap:12px}
+.lockup svg{width:46px;height:46px;flex:none;display:block}
+.lockup .word{font-weight:900;font-stretch:75%;font-size:34px;line-height:1;letter-spacing:.01em;text-transform:uppercase}
+.lockup small{display:block;font:500 6.5px/1 "IBM Plex Mono",monospace;letter-spacing:.2em;text-transform:uppercase;color:#8F8F89;margin-top:5px}
+.ttl{text-align:right}
+.ttl .big{font-weight:900;font-stretch:75%;font-size:38px;line-height:1;text-transform:uppercase}
+.ttl .meta{font:500 10px/1.6 "IBM Plex Mono",monospace;margin-top:8px}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:30px;padding:26px 4px 0}
+.lab{font:500 8.5px/1 "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.08em;color:#6B6B66;margin-bottom:8px}
+.lab2{font-weight:700;font-size:13px;margin-bottom:8px}
+.name{font-weight:700;font-size:13px;margin-bottom:3px}
+.adr{font-size:12px;line-height:1.6}
+.small{font-size:10px;color:#6B6B66;line-height:1.6;margin-top:8px}
+h2{font-weight:800;font-size:15px;margin:34px 4px 12px}
+table{width:calc(100% - 8px);margin:0 4px;border-collapse:collapse}
+th{background:#0A0A0A;color:#F4F3EF;font:500 8.5px/1 "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:9px 10px}
+td{padding:11px 10px;border-bottom:1px solid #DCDBD6;vertical-align:top;font-size:12px}
+tbody tr:nth-child(even) td{background:#F4F3EF}
+td.c,th.c{text-align:center;width:60px}
+td.r,th.r{text-align:right;white-space:nowrap;width:120px}
+.sm{font-size:10px;color:#6B6B66;margin-top:3px}
+.tots{margin:20px 4px 0;display:grid;gap:10px}
+.tr{display:flex;justify-content:space-between;align-items:baseline;gap:20px}
+.tr .k{font-weight:700;font-size:12px}
+.tr .v{font-weight:900;font-stretch:75%;font-size:22px;white-space:nowrap}
+.tr.sm2{font-size:11px;color:#6B6B66}
+.tva{font-size:10px;color:#6B6B66;margin:0 0 8px}
+.mod{margin:26px 4px 0;font-size:12px;line-height:1.6}
+.accord{margin:30px 4px 0;font-size:9.5px;color:#6B6B66;line-height:1.6}
+.foot{position:fixed;left:0;right:0;bottom:0;border-top:1px solid #0A0A0A;padding-top:6px;font:500 7.5px/1.6 "IBM Plex Mono",monospace;color:#6B6B66;text-align:center}
+</style>
+<body>
+<div class="band">
+  <div class="lockup">${mark}<div><div class="word">MAXIS</div><small>Votre site, vu de près.</small></div></div>
+  <div class="ttl"><div class="big">${esc(title)}</div>
+  <div class="meta">N° ${esc(f.numero)} • Date d'émission : ${dateFr}${isDevis?"<br>Valable 30 jours":""}</div></div>
+</div>
+<div class="parties">
+  <div><div class="lab">Émetteur</div><div class="name">${esc(r.raison)}</div><div class="adr">${lignesAdr(r.adresse)}</div>
+    <div class="small">Tél. : ${esc(r.tel)}<br>${esc(r.email)}<br>SIRET : ${esc(r.siret)}</div></div>
+  <div><div class="lab2">Adressé à</div><div class="name">${esc(c.nom||"")}</div><div class="adr">${lignesAdr(c.adresse)}${c.email?(c.adresse?"<br>":"")+esc(c.email):""}</div></div>
+</div>
+<h2>Détail de la prestation</h2>
+<table><thead><tr><th>Désignation</th><th class="c">Qté</th><th class="r">Prix unitaire</th><th class="r">Montant</th></tr></thead>
+<tbody>${lignes.map(l=>`<tr><td>${esc(l.designation)}${l.detail?`<div class="sm">${esc(l.detail)}</div>`:""}</td><td class="c">${l.qte}</td><td class="r">${fmtEur(l.pu)}</td><td class="r">${fmtEur(l.qte*l.pu)}</td></tr>`).join("")}</tbody></table>
+<div class="tots">
+  <div class="tr"><span class="k">Sous-total HT</span><span class="v">${fmtEur(brut)}</span></div>
+  ${remise>0?`<div class="tr sm2"><span>Remise client ${f.remisePct} %</span><span>− ${fmtEur(remise)}</span></div>`:""}
+  <p class="tva">${esc(r.tvaMention)}</p>
+  <div class="tr"><span class="k">TOTAL TTC (= HT)</span><span class="v">${fmtEur(montant)}</span></div>
+</div>
+${mod}
+${isDevis?`<p class="accord">Bon pour accord : le client appose la mention « Bon pour accord », la date et sa signature avant retour de ce document pour valider la commande.</p>`:""}
+<div class="foot">${esc(r.raison)} — ${esc(r.statut)} — SIREN ${esc(siren)} — SIRET ${esc(r.siret)}<br>${esc(r.tvaMention)} — ${esc(r.rcs)}<br>${isDevis?`Devis valable 30 jours à compter du ${dateFr}`:`${esc(title)} ${esc(f.numero)} — émise le ${dateFr}`}</div>
+<script>window.addEventListener("load",()=>setTimeout(()=>print(),200))<\/script></body></html>`;
   const w=window.open("","_blank");
   if(!w){toast("Autorise les fenêtres pour imprimer le document");return}
   w.document.open();w.document.write(html);w.document.close();
@@ -681,7 +830,7 @@ async function importAll(input){
 }
 async function saveReglages(){
   const g=n=>($("#r-"+n)?.value??"").trim();
-  await put("reglages","maxis",{raison:g("raison"),siret:g("siret"),adresse:g("adresse"),email:g("email"),tel:g("tel"),tvaMention:$("#r-tva").value.trim()});
+  await put("reglages","maxis",{raison:g("raison"),siret:g("siret"),adresse:g("adresse"),email:g("email"),tel:g("tel"),tvaMention:$("#r-tva").value.trim(),statut:g("statut"),rcs:g("rcs")});
   toast("Réglages enregistrés");
 }
 
@@ -701,6 +850,8 @@ async function act(a,el,e){
     case "delRec": if(armed(el)){await del(el.dataset.col,el.dataset.id);paintModal()} break;
     case "newFac": openModal("fac",null); break;
     case "saveFac": await saveFac(); break;
+    case "addLine": addLineRow({qte:1,pu:""}); break;
+    case "delLine": el.closest(".line")?.remove(); updTotaux(); break;
     case "printFac": printFac(el.dataset.id); break;
     case "delFac": if(armed(el))await del("factures",el.dataset.id); break;
     case "openDoc": if(LOCAL){e.preventDefault();await openDoc(el.dataset.asset)} break;
@@ -732,9 +883,12 @@ document.addEventListener("change",async e=>{
   if(c==="factStat"){const f=S.factures.get(el.dataset.id);if(f)await put("factures",f.id,{...f,statut:el.value})}
   if(c==="affStat"){const f=S.affaires.get(el.dataset.id);if(f){await put("affaires",f.id,{...f,statut:el.value});paintModal()}}
   if(c==="calcFac")calcFac();
+  if(c==="coPick")coPick();
+  if(c==="affPick")affPick();
   if(c==="upload")await uploadDoc(el);
   if(c==="importAll")await importAll(el);
 });
+document.addEventListener("input",e=>{if(modal?.kind==="fac")updTotaux()});
 /* Glisser-déposer des cartes du pipeline */
 let dragId=null;
 document.addEventListener("dragstart",e=>{const c=e.target.closest?.("[data-card]");if(!c)return;dragId=c.dataset.card;e.dataTransfer.setData("text/plain",dragId);e.dataTransfer.effectAllowed="move"});
