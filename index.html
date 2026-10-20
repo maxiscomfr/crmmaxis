@@ -194,7 +194,7 @@ const ACCEPT_ARTIFACT=".pdf,.png,.jpg,.jpeg,.webp,.gif,.svg,.mp4,.webm,.woff2,.w
 
 /* ============ État ============ */
 const S=Object.fromEntries(COLS.map(c=>[c,new Map()]));
-let dbRef=null, assetsRef=null, LOCAL=false, view="accueil", modal=null;
+let dbRef=null, assetsRef=null, LOCAL=false, CLOUD=false, view="accueil", modal=null;
 const UI={q:"",fStatut:"",sort:"nom",fqQ:"",fqStat:"",docQ:"",docCat:""};
 
 /* ============ Utilitaires ============ */
@@ -223,6 +223,74 @@ function nextNumero(type){
   const p=pKey(type),y=new Date().getFullYear(),re=new RegExp(`^${p}-${y}-(\\d+)$`);
   let max=0;for(const f of S.factures.values()){const m=re.exec(f.numero||"");if(m)max=Math.max(max,+m[1])}
   return `${p}-${y}-${String(max+1).padStart(3,"0")}`;
+}
+
+/* ============ Stockage partagé : Supabase (tes appareils voient les mêmes données) ============ */
+function cloudDb(){
+  const subs={},last={},cache={};
+  const tbl=c=>"/rest/v1/crm_"+c;
+  async function load(c){
+    try{
+      const rows=await sbFetch(tbl(c)+"?select=id,data");
+      const list=rows||[],key=JSON.stringify(list);
+      cache[c]=Object.fromEntries(list.map(r=>[r.id,r.data]));
+      if(key===last[c])return;
+      last[c]=key;
+      const snap={docs:list.map(r=>({id:r.id,exists:true,data:()=>JSON.parse(JSON.stringify(r.data))}))};
+      (subs[c]||[]).forEach(cb=>cb(snap));
+    }catch(e){
+      if(!sbSession())renderGate();
+      else toast("Synchronisation : "+e.message);
+    }
+  }
+  const save=async(c,id,data)=>{
+    await sbFetch(tbl(c)+"?on_conflict=id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id,data:JSON.parse(JSON.stringify(data))})});
+    await load(c);
+  };
+  return{
+    refreshAll:()=>COLS.forEach(load),
+    collection(c){return{
+      onSnapshot(cb){(subs[c]||=[]).push(cb);load(c);return()=>{subs[c]=(subs[c]||[]).filter(x=>x!==cb)}},
+      doc(id){return{
+        set:async d=>{await save(c,id,d)},
+        update:async d=>{await save(c,id,{...(cache[c]?.[id]||{}),...d})},
+        delete:async()=>{await sbFetch(tbl(c)+"?id=eq."+encodeURIComponent(id),{method:"DELETE",headers:{Prefer:"return=minimal"}});await load(c)}
+      }}
+    }}}
+  ;
+}
+function cloudAssets(){
+  const B="/storage/v1/object/crm-files/";
+  return{
+    upload:async blob=>{
+      const id=uid()+uid(),type=blob.type||"application/octet-stream";
+      await sbFetch(B+id,{method:"POST",headers:{"Content-Type":type},body:blob});
+      return{id,sizeBytes:blob.size,contentType:type};
+    },
+    delete:async id=>{await sbFetch(B+id,{method:"DELETE"});return{deleted:true}},
+    signedUrl:async id=>{
+      const r=await sbFetch("/storage/v1/object/sign/crm-files/"+id,{method:"POST",body:JSON.stringify({expiresIn:3600})});
+      return SB.url+"/storage/v1"+r.signedURL;
+    },
+    get:async()=>null
+  };
+}
+function renderGate(){
+  const nav=$("#nav");if(nav)nav.hidden=true;
+  $("#main").innerHTML=`<h1>Connexion</h1><p class="lede">Ton CRM est partagé entre tes appareils. Connecte-toi avec le code reçu par email.</p>`+sbLoginHtml();
+  $("#modal").innerHTML="";
+}
+async function migrateLocal(){
+  let n=0;
+  for(const c of COLS){
+    if(c==="documents")continue;
+    let o={};try{o=JSON.parse(localStorage.getItem("crmmaxis:"+c)||"{}")}catch(_){}
+    for(const [id,d] of Object.entries(o)){
+      if(S[c].has(id))continue;
+      await put(c,id,d);n++;
+    }
+  }
+  toast(n?n+" élément(s) copié(s) dans ta base partagée":"Rien à copier : ce navigateur ne contient pas de données");
 }
 
 /* ============ Stockage : Claude (si disponible) ou navigateur (Netlify, poste local) ============ */
@@ -259,7 +327,10 @@ async function boot(){
     try{assetsRef=await window.claude.use("assets")}catch(_){assetsRef=null}
     if(!dbRef){$("#main").innerHTML=`<div class="empty"><h2>Base indisponible</h2>La base n'est pas accessible dans cette vue. Ouvre la page depuis ton compte MAXIS.</div>`;return}
   }else{
-    LOCAL=true;dbRef=localDb();assetsRef=localAssets();
+    LOCAL=true;
+    if(!sbSession()){renderGate();return}
+    CLOUD=true;const cdb=cloudDb();dbRef=cdb;assetsRef=cloudAssets();
+    setInterval(cdb.refreshAll,20000);window.addEventListener("focus",cdb.refreshAll);
   }
   COLS.forEach(c=>{
     dbRef.collection(c).onSnapshot(snap=>{
@@ -360,7 +431,7 @@ function accueil(){
         </div>`).join(""):`<p class="label" style="padding:14px 0">Aucun échange noté.</p>`}</div>
     </section>
   </div>
-  <p class="foot">${LOCAL?"Données enregistrées dans ce navigateur. Exporte une sauvegarde depuis Réglages.":"Données partagées, enregistrées dans la base de l'espace MAXIS."}</p>`;
+  <p class="foot">${CLOUD?"Données synchronisées entre tes appareils. Une sauvegarde JSON reste conseillée (Réglages).":LOCAL?"Données enregistrées dans ce navigateur. Exporte une sauvegarde depuis Réglages.":"Données partagées, enregistrées dans la base de l'espace MAXIS."}</p>`;
 }
 
 function pipeline(){
@@ -498,9 +569,9 @@ function reglages(){
     <p style="margin-top:14px"><button class="btn acc" data-act="saveReglages">Enregistrer</button></p>
   </div>
   <div class="sec"><h2>Sauvegarde</h2>
-    ${LOCAL?`<p class="muted" style="margin:10px 0">Les données restent dans ce navigateur. Exporte une sauvegarde régulière (fichier JSON). Les fichiers joints ne sont pas inclus dans l'export.</p>
+    ${LOCAL?`<p class="muted" style="margin:10px 0">${CLOUD?"Les données sont synchronisées entre tes appareils. Exporte une sauvegarde de temps en temps (fichier JSON). Les fichiers joints ne sont pas inclus dans l'export.":"Les données restent dans ce navigateur. Exporte une sauvegarde régulière (fichier JSON). Les fichiers joints ne sont pas inclus dans l'export."}</p>
     <div class="inline"><button class="btn" data-act="exportAll">Exporter (JSON)</button>
-    <label class="btn ghost" style="cursor:pointer">Importer une sauvegarde<input type="file" accept="application/json,.json" data-chg="importAll" hidden></label></div>`
+    <label class="btn ghost" style="cursor:pointer">Importer une sauvegarde<input type="file" accept="application/json,.json" data-chg="importAll" hidden></label>${CLOUD?`<button class="btn ghost" data-act="migrateLocal">Copier les données de ce navigateur</button>`:""}</div>`
     :`<p class="muted" style="margin:10px 0">Les données sont dans la base partagée de l'espace MAXIS, sauvegardées automatiquement.</p>`}
   </div>
   <div class="sec"><h2>Affichage</h2><p class="muted" style="margin:10px 0">Le thème se règle avec le bouton « Thème » en haut de page.</p></div>`;
@@ -946,6 +1017,7 @@ async function uploadDoc(input){
 }
 async function openDoc(id){
   if(!LOCAL)return;
+  if(CLOUD){const u=await assetsRef.signedUrl(id);if(!u){toast("Fichier introuvable");return}window.open(u,"_blank","noopener");return}
   const blob=await assetsRef.get(id);
   if(!blob){toast("Fichier introuvable dans ce navigateur");return}
   const u=URL.createObjectURL(blob);
@@ -1004,9 +1076,10 @@ async function act(a,el,e){
       if(modal)paintModal();
       break;
     case "saveReglages": await saveReglages(); break;
-    case "sbLogin": {const m=($("#sb-mail")?.value||"maxiscomfr@gmail.com").trim();try{await sbSendLink(m);sbCodeSent=true;sbMail=m;toast("Code envoyé par email");paintDemandes()}catch(err){toast(err.status===429?"Trop de demandes. Attends 5 minutes puis réessaie une seule fois.":"Envoi impossible : "+err.message)}break}
-    case "sbVerify": {const c=($("#sb-code")?.value||"").replace(/\s/g,"");if(!c){toast("Saisis le code reçu");break}try{await sbVerifyCode(sbMail,c);sbCodeSent=false;toast("Connecté");paintDemandes()}catch(err){toast("Code refusé ou expiré. Demande-en un nouveau.")}break}
-    case "sbLogout": sbSave(null); paintDemandes(); break;
+    case "sbLogin": {const m=($("#sb-mail")?.value||"maxiscomfr@gmail.com").trim();try{await sbSendLink(m);sbCodeSent=true;sbMail=m;toast("Code envoyé par email");renderGate()}catch(err){toast(err.status===429?"Trop de demandes. Attends 5 minutes puis réessaie une seule fois.":"Envoi impossible : "+err.message)}break}
+    case "sbVerify": {const c=($("#sb-code")?.value||"").replace(/\s/g,"");if(!c){toast("Saisis le code reçu");break}try{await sbVerifyCode(sbMail,c);sbCodeSent=false;toast("Connecté");location.reload()}catch(err){toast("Code refusé ou expiré. Demande-en un nouveau.")}break}
+    case "sbLogout": sbSave(null); location.reload(); break;
+    case "migrateLocal": await migrateLocal(); break;
     case "convertDemande": await convertDemande(el.dataset.id); break;
     case "pushOn": await pushOn(); break;
     case "ignoreDemande": await ignoreDemande(el.dataset.id); break;

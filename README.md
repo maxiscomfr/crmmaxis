@@ -1,6 +1,6 @@
 # CRM MAXIS
 
-CRM interne de MAXIS : entreprises et contacts, pipeline, affaires, devis et factures (acompte 30 %, solde 70 %), documents et impression.
+CRM interne de MAXIS (données partagées entre ordinateur et téléphone via Supabase) : entreprises et contacts, pipeline, affaires, devis et factures (acompte 30 %, solde 70 %), documents et impression.
 
 Une seule page (`index.html`), sans serveur ni installation.
 
@@ -32,6 +32,7 @@ Un site Netlify est public : toute personne qui connaît l'adresse peut ouvrir l
 - Fiches entreprises : contacts, échanges, affaires, devis et factures, documents.
 - Devis et factures : numérotation automatique, lignes détaillées (désignation, détail, quantité, prix HT), remise client en pourcentage, acompte et solde calculés depuis l'affaire, impression au format du devis MAXIS.
 - Remise client : pourcentage saisi sur la fiche entreprise, repris automatiquement sur chaque nouveau devis ou facture (modifiable).
+- Synchronisation : entreprises, contacts, échanges, affaires, devis, factures, réglages dans Supabase (`supabase/crm-sync.sql`), fichiers joints dans le stockage privé `crm-files`. Connexion par code reçu par email.
 - Demandes du site : onglet « Demandes », connexion par code reçu par email, création de fiche depuis une demande. Les demandes viennent de la table `demandes` du projet Supabase (schéma dans `supabase/schema.sql`).
 - Notifications push sur téléphone (application installée sur l'écran d'accueil) à chaque nouvelle demande : service worker `sw.js` et fonction `supabase/functions/notify-demande`.
 - Icônes : favicon, icône d'application (écran d'accueil iPhone et Android) et manifeste web.
