@@ -167,6 +167,7 @@ tbody tr:hover td{background:var(--hover)}
   <button data-act="view" data-view="accueil">Accueil</button>
   <button data-act="view" data-view="pipeline">Pipeline</button>
   <button data-act="view" data-view="entreprises">Entreprises</button>
+  <button data-act="view" data-view="demandes">Demandes</button>
   <button data-act="view" data-view="facturation">Devis &amp; factures</button>
   <button data-act="view" data-view="documents">Documents</button>
   <button data-act="view" data-view="reglages">Réglages</button>
@@ -251,6 +252,7 @@ function localAssets(){
 }
 
 async function boot(){
+  if(sbFromHash())view="demandes";
   const hasClaude=!!window.claude;
   if(hasClaude){
     try{dbRef=await window.claude.use("db")}catch(_){dbRef=null}
@@ -289,7 +291,7 @@ function applyTheme(){
 }
 
 /* ============ Rendu ============ */
-const VIEWS={accueil,pipeline,entreprises,facturation,documents,reglages};
+const VIEWS={accueil,pipeline,entreprises,demandes,facturation,documents,reglages};
 function render(){
   const counts={entreprises:S.entreprises.size,facturation:S.factures.size,documents:S.documents.size};
   document.querySelectorAll(".nav button").forEach(b=>{
@@ -300,6 +302,7 @@ function render(){
   if(view==="entreprises")paintRows();
   if(view==="facturation")paintFac();
   if(view==="documents")paintDocs();
+  if(view==="demandes")paintDemandes();
 }
 const empty=(title,text)=>`<div class="empty"><h2>${title}</h2><p class="sub">${text}</p></div>`;
 
@@ -501,6 +504,93 @@ function reglages(){
     :`<p class="muted" style="margin:10px 0">Les données sont dans la base partagée de l'espace MAXIS, sauvegardées automatiquement.</p>`}
   </div>
   <div class="sec"><h2>Affichage</h2><p class="muted" style="margin:10px 0">Le thème se règle avec le bouton « Thème » en haut de page.</p></div>`;
+}
+
+/* ============ Demandes du site (Supabase, projet hmsiombfrtwnexrixwnd) ============ */
+const SB={url:"https://hmsiombfrtwnexrixwnd.supabase.co",key:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhtc2lvbWJmcnR3bmV4cml4d25kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0OTQyMjksImV4cCI6MjEwODA3MDIyOX0.spgeEoEfi9N0UUCidoWRF8o2bxUcf0LV8iV3zf_LRaw"};
+let demCache=[];
+function sbSession(){try{return JSON.parse(localStorage.getItem("crmmaxis:sb")||"null")}catch(_){return null}}
+function sbSave(s){try{s?localStorage.setItem("crmmaxis:sb",JSON.stringify(s)):localStorage.removeItem("crmmaxis:sb")}catch(_){}}
+function sbFromHash(){
+  const h=new URLSearchParams(location.hash.slice(1)),at=h.get("access_token");
+  if(!at)return false;
+  sbSave({access_token:at,refresh_token:h.get("refresh_token"),expires_at:Date.now()+(+h.get("expires_in")||3600)*1000});
+  history.replaceState(null,"",location.pathname+location.search);
+  return true;
+}
+async function sbRefresh(){
+  const s=sbSession();if(!s?.refresh_token)return false;
+  try{
+    const r=await fetch(SB.url+"/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{apikey:SB.key,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:s.refresh_token})});
+    if(!r.ok){sbSave(null);return false}
+    const j=await r.json();
+    sbSave({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+j.expires_in*1000});
+    return true;
+  }catch(_){return false}
+}
+async function sbFetch(path,opts={},retry=true){
+  const s=sbSession();
+  const headers={apikey:SB.key,"Content-Type":"application/json",...(opts.headers||{})};
+  if(s?.access_token)headers.Authorization="Bearer "+s.access_token;
+  const r=await fetch(SB.url+path,{...opts,headers});
+  if(r.status===401&&retry&&await sbRefresh())return sbFetch(path,opts,false);
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const t=await r.text();
+  return t?JSON.parse(t):null;
+}
+async function sbSendLink(email){
+  const r=await fetch(SB.url+"/auth/v1/otp",{method:"POST",headers:{apikey:SB.key,"Content-Type":"application/json"},body:JSON.stringify({email,create_user:false,options:{emailRedirectTo:location.origin+location.pathname}})});
+  if(!r.ok)throw new Error("HTTP "+r.status);
+}
+function demandes(){
+  return `<h1>Demandes</h1>
+  <p class="lede">Les messages envoyés depuis le formulaire de MAXIS.com. Crée une fiche pour les reprendre dans le CRM.</p>
+  <div id="dem"></div>`;
+}
+function sbLoginHtml(msg=""){
+  return `<div class="box"><p class="label">Connexion</p>
+    <p class="muted" style="margin:0">${msg||"Reçois un lien de connexion par email pour afficher les demandes."}</p>
+    <div class="inline"><label class="f"><span class="label">Email</span><input id="sb-mail" type="email" value="maxiscomfr@gmail.com" autocomplete="email"></label>
+    <button class="btn acc" data-act="sbLogin">Recevoir le lien</button></div></div>`;
+}
+async function paintDemandes(){
+  const box=$("#dem");if(!box)return;
+  if(!sbSession()){box.innerHTML=sbLoginHtml();return}
+  box.innerHTML=`<p class="label">Chargement…</p>`;
+  try{
+    const rows=await sbFetch("/rest/v1/demandes?select=*&order=created_at.desc");
+    demCache=rows||[];
+    if(!$("#dem"))return;
+    $("#dem").innerHTML=`<div class="inline" style="margin-bottom:12px"><span class="label">${demCache.length} demande${demCache.length>1?"s":""}</span><button class="btn ghost sm" data-act="sbLogout" style="margin-left:auto;flex:0 0 auto">Se déconnecter</button></div>`+
+      (demCache.length?`<div class="tbl"><table><thead><tr><th>Date</th><th>Contact</th><th>Entreprise</th><th>Message</th><th>Statut</th><th><span class="label">Actions</span></th></tr></thead><tbody>${demCache.map(d=>`<tr>
+        <td class="num">${fmtDate(String(d.created_at||"").slice(0,10))}</td>
+        <td><strong>${esc(d.nom)}</strong><div class="label">${esc(d.email)}${d.telephone?" · "+esc(d.telephone):""}</div></td>
+        <td>${esc(d.entreprise||"—")}</td><td>${esc((d.message||"").slice(0,160))}</td>
+        <td>${esc(d.statut)}</td>
+        <td>${d.statut==="Nouvelle"?`<div class="inline" style="flex-wrap:nowrap"><button class="btn sm" data-act="convertDemande" data-id="${d.id}">Créer la fiche</button><button class="btn ghost sm" data-act="ignoreDemande" data-id="${d.id}">Ignorer</button></div>`:(d.entreprise_crm_id?`<button class="btn ghost sm" data-act="openCo" data-id="${d.entreprise_crm_id}">Voir la fiche</button>`:"")}</td>
+      </tr>`).join("")}</tbody></table></div>`:empty("Aucune demande","Les messages du formulaire du site apparaîtront ici."));
+  }catch(e){
+    box.innerHTML=sbLoginHtml(`Impossible de charger les demandes (${esc(e.message)}). Reconnecte-toi.`);
+  }
+}
+async function convertDemande(id){
+  const d=demCache.find(x=>x.id===id);if(!d)return;
+  const cid=uid();
+  await put("entreprises",cid,{nom:d.entreprise||d.nom,secteur:"",ville:"",site:"",telephone:d.telephone||"",email:d.email||"",adresse:"",source:"Site web",statut:"Nouveau",signal:SIGNAUX[0],prochaineAction:"Répondre à la demande du site",dateProchaineAction:today(),notes:"",creeLe:today(),misAJour:today()});
+  await put("contacts",uid(),{entrepriseId:cid,nom:d.nom,fonction:"",email:d.email||"",telephone:d.telephone||""});
+  if(d.message)await put("activites",uid(),{entrepriseId:cid,type:"Note",date:today(),resume:"Demande du site : "+d.message});
+  try{
+    await sbFetch("/rest/v1/demandes?id=eq."+encodeURIComponent(id),{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({statut:"Convertie",entreprise_crm_id:cid,traitee_le:new Date().toISOString()})});
+  }catch(e){toast("Fiche créée, mais la demande n'a pas pu être marquée : "+e.message);return}
+  toast("Fiche créée depuis la demande");
+  openModal("co",cid);
+  paintDemandes();
+}
+async function ignoreDemande(id){
+  try{
+    await sbFetch("/rest/v1/demandes?id=eq."+encodeURIComponent(id),{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({statut:"Ignorée",traitee_le:new Date().toISOString()})});
+    toast("Demande ignorée");paintDemandes();
+  }catch(e){toast("Action impossible : "+e.message)}
 }
 
 /* ============ Fiche entreprise ============ */
@@ -862,6 +952,10 @@ async function act(a,el,e){
       if(modal)paintModal();
       break;
     case "saveReglages": await saveReglages(); break;
+    case "sbLogin": {const m=($("#sb-mail")?.value||"").trim();if(!m){toast("Indique ton email");break}try{await sbSendLink(m);toast("Lien envoyé. Ouvre-le sur cet appareil.")}catch(err){toast("Envoi impossible : "+err.message)}break}
+    case "sbLogout": sbSave(null); paintDemandes(); break;
+    case "convertDemande": await convertDemande(el.dataset.id); break;
+    case "ignoreDemande": await ignoreDemande(el.dataset.id); break;
     case "exportAll": exportAll(); break;
   }
 }
