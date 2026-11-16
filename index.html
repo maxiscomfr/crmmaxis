@@ -507,17 +507,19 @@ function facturation(){
 function paintFac(){
   const box=$("#facs");if(!box)return;
   const needle=UI.fqQ.trim().toLowerCase();
-  const list=byKey(S.factures,"date",-1).filter(f=>(!UI.fqStat||f.statut===UI.fqStat)&&(!needle||(f.numero+" "+coName(f.entrepriseId)).toLowerCase().includes(needle)));
+  const list=byKey(S.factures,"date",-1).filter(f=>(!UI.fqStat||statutNorm(f)===UI.fqStat)&&(!needle||(f.numero+" "+coName(f.entrepriseId)).toLowerCase().includes(needle)));
   if(!S.factures.size){box.innerHTML=empty("Aucun devis ni facture","Crée un devis depuis le bouton ci-dessus, puis la facture d'acompte et celle de solde à partir de ce devis.");return}
-  box.innerHTML=list.length?`<div class="tbl"><table>
+  const table=(rows,devis)=>`<div class="tbl"><table>
     <thead><tr><th>Numéro</th><th>Type</th><th>Client</th><th>Date</th><th class="r">Montant HT</th><th>Statut</th><th><span class="label">Actions</span></th></tr></thead>
-    <tbody>${list.map(f=>`<tr>
+    <tbody>${rows.map(f=>`<tr>
       <td class="num"><strong>${esc(f.numero)}</strong></td><td>${esc(f.type)}</td>
       <td class="clickable" data-act="openCo" data-id="${f.entrepriseId}">${esc(coName(f.entrepriseId))}</td>
       <td class="num">${fmtDate(f.date)}</td><td class="num r">${fmtEur(f.montant)}</td>
-      <td><select data-chg="factStat" data-id="${f.id}" aria-label="Statut de ${esc(f.numero)}">${statutOpts(statutsOf(f),statutNorm(f),isDevisDoc(f))}</select></td>
+      <td><select data-chg="factStat" data-id="${f.id}" aria-label="Statut de ${esc(f.numero)}">${statutOpts(statutsOf(f),statutNorm(f),devis)}</select></td>
       <td><div class="inline" style="flex-wrap:nowrap"><button class="btn ghost sm" data-act="printFac" data-id="${f.id}">Imprimer</button><button class="btn danger sm" data-act="delFac" data-id="${f.id}" data-label="Supprimer">Supprimer</button></div></td>
-    </tr>`).join("")}</tbody></table></div>`:`<p class="label" style="padding:18px 0">Aucun document ne correspond au filtre.</p>`;
+    </tr>`).join("")}</tbody></table></div>`;
+  const section=(titre,rows,devis)=>`<div class="head" style="margin:26px 0 10px"><h2>${titre}</h2><span class="label">${rows.length} · ${fmtEur(sumBy(rows,"montant"))}</span></div>`+(rows.length?table(rows,devis):`<p class="label" style="padding:12px 0">${(UI.fqStat||needle)?"Aucun document ne correspond au filtre.":"Aucun "+titre.toLowerCase().replace(/s$/,"")+" pour l'instant."}</p>`);
+  box.innerHTML=section("Devis",list.filter(isDevisDoc),true)+section("Factures",list.filter(f=>!isDevisDoc(f)),false);
 }
 
 function documents(){
