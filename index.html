@@ -502,7 +502,7 @@ function paintFac(){
   const box=$("#facs");if(!box)return;
   const needle=UI.fqQ.trim().toLowerCase();
   const list=byKey(S.factures,"date",-1).filter(f=>(!UI.fqStat||f.statut===UI.fqStat)&&(!needle||(f.numero+" "+coName(f.entrepriseId)).toLowerCase().includes(needle)));
-  if(!S.factures.size){box.innerHTML=empty("Aucun devis ni facture","Crée un devis depuis le bouton ci-dessus, ou depuis une affaire, puis la facture d'acompte et celle de solde.");return}
+  if(!S.factures.size){box.innerHTML=empty("Aucun devis ni facture","Crée un devis depuis le bouton ci-dessus, puis la facture d'acompte et celle de solde à partir de ce devis.");return}
   box.innerHTML=list.length?`<div class="tbl"><table>
     <thead><tr><th>Numéro</th><th>Type</th><th>Client</th><th>Date</th><th class="r">Montant HT</th><th>Statut</th><th><span class="label">Actions</span></th></tr></thead>
     <tbody>${list.map(f=>`<tr>
@@ -817,14 +817,25 @@ function commSection(id,c){
   </div>`;
 }
 
+function affOptions(coId){
+  const affs=byKey(S.affaires,"date",-1).filter(a=>!coId||a.entrepriseId===coId);
+  const none=coId&&!affs.length?"Aucune affaire pour cette entreprise":"Aucune";
+  return `<option value="">${none}</option>`+affs.map(a=>`<option value="${a.id}" data-co="${a.entrepriseId}" data-m="${Number(a.montant)||0}" data-p="${esc(a.prestation)}">${coId?"":esc(coName(a.entrepriseId))+" — "}${esc(a.prestation)} (${fmtEur(a.montant)})</option>`).join("");
+}
+function devisOptions(coId){
+  if(!coId)return `<option value="">Choisis d'abord l'entreprise</option>`;
+  const devs=byKey(S.factures,"date",-1).filter(f=>f.entrepriseId===coId&&f.type==="Devis");
+  if(!devs.length)return `<option value="">Aucun devis pour cette entreprise</option>`;
+  return `<option value="">Choisir le devis</option>`+devs.map(d=>{const p=(d.lignes||[]).map(l=>l.designation).filter(Boolean).join(", ")||"Devis";return `<option value="${d.id}" data-m="${Number(d.montant)||0}" data-p="${esc(p)}" data-aff="${d.affaireId||""}">${esc(d.numero)} — ${esc(p)} (${fmtEur(d.montant)})</option>`}).join("");
+}
 function facHtml(){
   const cos=byKey(S.entreprises,"nom");
-  const affs=byKey(S.affaires,"date",-1);
   return `<div class="sheet-h"><h2>Nouveau devis ou facture</h2><button class="btn ghost sm" data-act="close">Fermer</button></div>
   <div class="form two" style="margin-top:14px">
     <label class="f"><span class="label">Type</span><select id="fa-type" data-chg="calcFac">${TYPES_FAC.map(t=>`<option>${t}</option>`).join("")}</select></label>
     <label class="f"><span class="label">Entreprise *</span><select id="fa-co" data-chg="coPick"><option value="">Choisir</option>${cos.map(c=>`<option value="${c.id}" data-remise="${Number(c.remise)||0}">${esc(c.nom)}</option>`).join("")}</select></label>
-    <label class="f full"><span class="label">Affaire (pré-remplit les lignes, ou sert de base à l'acompte et au solde)</span><select id="fa-aff" data-chg="affPick"><option value="">Aucune</option>${affs.map(a=>`<option value="${a.id}" data-co="${a.entrepriseId}" data-m="${Number(a.montant)||0}" data-p="${esc(a.prestation)}">${esc(coName(a.entrepriseId))} — ${esc(a.prestation)} (${fmtEur(a.montant)})</option>`).join("")}</select></label>
+    <label class="f full" id="fa-aff-w"><span class="label">Affaire de l'entreprise (pré-remplit les lignes du devis)</span><select id="fa-aff" data-chg="affPick">${affOptions("")}</select></label>
+    <label class="f full" id="fa-dev-w" hidden><span class="label">Devis de l'entreprise (base de la facture) *</span><select id="fa-dev" data-chg="devPick">${devisOptions("")}</select></label>
     <label class="f"><span class="label">Date</span><input id="fa-date" type="date" value="${today()}"></label>
     <label class="f"><span class="label">Statut</span><select id="fa-statut">${STATUT_FAC.map(s=>`<option>${s}</option>`).join("")}</select></label>
   </div>
@@ -854,14 +865,17 @@ function updTotaux(){
   const box=$("#totaux");if(!box||modal?.kind!=="fac")return;
   const type=$("#fa-type").value,isAc=/acompte|solde/i.test(type);
   const pct=type.includes("30")?30:type.includes("70")?70:100;
+  const isDev=type==="Devis";
   $("#fa-remise").disabled=isAc;
   $("#sec-lignes").hidden=isAc;
+  $("#fa-aff-w").hidden=!isDev;
+  $("#fa-dev-w").hidden=isDev;
   document.querySelectorAll("#lignes .line").forEach(r=>{r.querySelector(".lm").textContent=fmtEur((Number(r.querySelector(".lq").value)||0)*(Number(r.querySelector(".lpu").value)||0))});
   if(isAc){
-    const o=$("#fa-aff").selectedOptions[0];
+    const o=$("#fa-dev").selectedOptions[0];
     const base=Number(o?.dataset.m)||0,montant=Math.round(base*pct)/100;
-    box.innerHTML=`<div class="tr"><span>Base HT de l'affaire</span><span class="num">${fmtEur(base)}</span></div>
-      <div class="tr"><span>${pct} % de la base</span><span class="num">${fmtEur(montant)}</span></div>
+    box.innerHTML=`<div class="tr"><span>Total HT du devis</span><span class="num">${fmtEur(base)}</span></div>
+      <div class="tr"><span>${pct} % du devis</span><span class="num">${fmtEur(montant)}</span></div>
       <div class="tr big"><span>Montant HT</span><span class="num">${fmtEur(montant)}</span></div>`;
     return;
   }
@@ -873,29 +887,53 @@ function updTotaux(){
     <div class="tr big"><span>Total HT</span><span class="num">${fmtEur(montant)}</span></div>`;
 }
 function addLineRow(l){$("#lignes").appendChild(lineRow(l));updTotaux()}
-function coPick(){const o=$("#fa-co").selectedOptions[0];if(o&&o.value)$("#fa-remise").value=o.dataset.remise||0;updTotaux()}
+function coPick(){
+  const o=$("#fa-co").selectedOptions[0],coId=o?.value||"";
+  if(coId)$("#fa-remise").value=o.dataset.remise||0;
+  const keepAff=$("#fa-aff").value;
+  $("#fa-aff").innerHTML=affOptions(coId);
+  if(keepAff&&S.affaires.get(keepAff)?.entrepriseId===coId)$("#fa-aff").value=keepAff;
+  $("#fa-dev").innerHTML=devisOptions(coId);
+  updTotaux();
+}
 function affPick(){
   const o=$("#fa-aff").selectedOptions[0];
   if(o&&o.value){
-    $("#fa-co").value=o.dataset.co;coPick();
-    if(!/acompte|solde/i.test($("#fa-type").value)){$("#lignes").innerHTML="";$("#lignes").appendChild(lineRow({designation:o.dataset.p,qte:1,pu:Number(o.dataset.m)||0}))}
+    if($("#fa-co").value!==o.dataset.co){$("#fa-co").value=o.dataset.co;coPick();$("#fa-aff").value=o.value}
+    $("#lignes").innerHTML="";$("#lignes").appendChild(lineRow({designation:o.dataset.p,qte:1,pu:Number(o.dataset.m)||0}));
   }
   updTotaux();
 }
-function calcFac(){updTotaux()}
+function devPick(){
+  const d=S.factures.get($("#fa-dev").value);
+  if(d&&!/acompte|solde/i.test($("#fa-type").value)){
+    $("#lignes").innerHTML="";
+    for(const l of (d.lignes||[]))$("#lignes").appendChild(lineRow(l));
+    $("#fa-remise").value=Number(d.remisePct)||0;
+  }
+  updTotaux();
+}
+function calcFac(){if($("#fa-type").value!=="Devis"&&$("#fa-dev").value)devPick();else updTotaux()}
 async function saveFac(){
   const type=$("#fa-type").value,entrepriseId=$("#fa-co").value,isAc=/acompte|solde/i.test(type);
   if(!entrepriseId){toast("Choisis l'entreprise");return}
-  const affOpt=$("#fa-aff").selectedOptions[0],affaireId=affOpt?.value||null;
+  const isDev=type==="Devis";
+  let affaireId=null,devisId=null,devOpt=null;
+  if(isDev)affaireId=$("#fa-aff").value||null;
+  else{
+    devOpt=$("#fa-dev").selectedOptions[0];devisId=devOpt?.value||null;
+    if(!devisId){toast("Choisis le devis : la facture se fabrique à partir de lui");return}
+    affaireId=devOpt.dataset.aff||null;
+  }
   let lignes,brut,remisePct=0,remise=0,montant,base=null,pct=null;
   if(isAc){
-    if(!affaireId){toast("Choisis l'affaire : l'acompte et le solde se calculent dessus");return}
     pct=type.includes("30")?30:70;
-    base=Number(affOpt.dataset.m)||0;
+    base=Number(devOpt.dataset.m)||0;
     montant=Math.round(base*pct)/100;
-    if(!(montant>0)){toast("Cette affaire n'a pas de montant");return}
+    if(!(montant>0)){toast("Ce devis n'a pas de montant");return}
     const label=type.startsWith("Facture d'acompte")?"Acompte":"Solde";
-    lignes=[{designation:`${label} ${pct} % — ${affOpt.dataset.p}`,detail:"",qte:1,pu:montant}];
+    const dv=S.factures.get(devisId);
+    lignes=[{designation:`${label} ${pct} % — ${dv?.numero?"devis "+dv.numero+" — ":""}${devOpt.dataset.p}`,detail:"",qte:1,pu:montant}];
     brut=montant;
   }else{
     lignes=readLines();
@@ -906,7 +944,7 @@ async function saveFac(){
     montant=Math.round((brut-remise)*100)/100;
     if(!(montant>0)){toast("Le montant doit être supérieur à 0");return}
   }
-  await put("factures",uid(),{numero:nextNumero(type),type,entrepriseId,affaireId,date:$("#fa-date").value||today(),statut:$("#fa-statut").value,lignes,brut:Math.round(brut*100)/100,remisePct,remise,montant,base,pct});
+  await put("factures",uid(),{numero:nextNumero(type),type,entrepriseId,affaireId,devisId,date:$("#fa-date").value||today(),statut:$("#fa-statut").value,lignes,brut:Math.round(brut*100)/100,remisePct,remise,montant,base,pct});
   closeModal();toast("Document créé");
 }
 
@@ -1130,6 +1168,7 @@ document.addEventListener("change",async e=>{
   if(c==="calcFac")calcFac();
   if(c==="coPick")coPick();
   if(c==="affPick")affPick();
+  if(c==="devPick")devPick();
   if(c==="upload")await uploadDoc(el);
   if(c==="importAll")await importAll(el);
 });

@@ -30,7 +30,7 @@ Un site Netlify est public : toute personne qui connaît l'adresse peut ouvrir l
 - Tableau de bord : relances dues, encaissé sur 6 mois, taux de conversion.
 - Pipeline en colonnes : glisser-déposer ou changement d'étape depuis la carte.
 - Fiches entreprises : contacts, échanges, affaires, devis et factures, documents.
-- Devis et factures : numérotation automatique, lignes détaillées (désignation, détail, quantité, prix HT), remise client en pourcentage, acompte et solde calculés depuis l'affaire, impression au format du devis MAXIS.
+- Devis et factures : numérotation automatique, lignes détaillées (désignation, détail, quantité, prix HT), remise client en pourcentage, impression au format du devis MAXIS. Un devis ne propose que les affaires de l'entreprise choisie. Une facture (acompte 30 %, solde 70 % ou facture complète) se crée obligatoirement à partir d'un devis de l'entreprise : l'acompte et le solde se calculent sur le total HT du devis, la facture complète reprend ses lignes et sa remise.
 - Remise client : pourcentage saisi sur la fiche entreprise, repris automatiquement sur chaque nouveau devis ou facture (modifiable).
 - Synchronisation : entreprises, contacts, échanges, affaires, devis, factures, réglages dans Supabase (`supabase/crm-sync.sql`), fichiers joints dans le stockage privé `crm-files`. Connexion par code reçu par email.
 - Demandes du site : onglet « Demandes », connexion par code reçu par email, création de fiche depuis une demande. Les demandes viennent de la table `demandes` du projet Supabase (schéma dans `supabase/schema.sql`).
