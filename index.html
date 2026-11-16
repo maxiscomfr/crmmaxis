@@ -189,6 +189,12 @@ const PRESTATIONS=["Mini-audit gratuit","Audit complet","Correction de site","Cr
 const STATUT_AFF=["En négociation","Gagnée","Perdue"];
 const TYPES_FAC=["Devis","Facture d'acompte (30 %)","Facture de solde (70 %)","Facture"];
 const STATUT_FAC=["Brouillon","Envoyée","Payée"];
+const STATUT_DEV=["Brouillon","Envoyée"];
+const isDevisDoc=f=>String(f.type||"").startsWith("Devis");
+const statutsOf=f=>isDevisDoc(f)?STATUT_DEV:STATUT_FAC;
+const statutLabel=(s,devis)=>devis&&s==="Envoyée"?"Envoyé":s;
+const statutNorm=f=>isDevisDoc(f)&&f.statut==="Payée"?"Envoyée":f.statut;
+const statutOpts=(list,cur,devis)=>list.map(s=>`<option value="${s}" ${s===cur?"selected":""}>${statutLabel(s,devis)}</option>`).join("");
 const REGL_DEF={raison:"MAXIS.com",adresse:"2 place Louvois, 37100 Tours",siret:"938 105 533 00013",email:"maxiscomfr@gmail.com",tel:"07 45 51 79 65",statut:"Entrepreneur individuel (micro-entreprise)",rcs:"Non inscrit au RCS",tvaMention:"TVA non applicable, art. 293 B du CGI"};
 const CATS_DOC=["Devis","Facture","Audit","CGV / contrat","Visuel / logo","Charte graphique","Plaquette","Rendu client","Autre"];
 const COLS=["entreprises","contacts","activites","affaires","factures","documents","reglages"];
@@ -385,7 +391,7 @@ function accueil(){
   const relances=cos.filter(c=>c.dateProchaineAction&&c.dateProchaineAction<=t&&c.statut!=="Perdu");
   const gagnes=cos.filter(c=>GAGNES.includes(c.statut)).length,perdus=cos.filter(c=>c.statut==="Perdu").length;
   const conv=gagnes+perdus?Math.round(gagnes/(gagnes+perdus)*100):0;
-  const facs=[...S.factures.values()];
+  const facs=[...S.factures.values()].filter(f=>!isDevisDoc(f));
   const encaisse=sumBy(facs.filter(f=>f.statut==="Payée"),"montant");
   const attente=sumBy(facs.filter(f=>f.statut==="Envoyée"),"montant");
   const pipe=sumBy([...S.affaires.values()].filter(a=>a.statut==="En négociation"),"montant");
@@ -482,7 +488,7 @@ function paintRows(){
 }
 
 function facturation(){
-  const facs=byKey(S.factures,"date",-1);
+  const facs=byKey(S.factures,"date",-1).filter(f=>!isDevisDoc(f));
   const encaisse=sumBy(facs.filter(f=>f.statut==="Payée"),"montant"),attente=sumBy(facs.filter(f=>f.statut==="Envoyée"),"montant"),brouillon=sumBy(facs.filter(f=>f.statut==="Brouillon"),"montant");
   return `<h1>Devis &amp; factures</h1>
   <p class="lede">Numérotation automatique (DEV-AAAA-001, FAC-AAAA-001). Acompte 30 % à la commande, solde 70 % à la livraison.</p>
@@ -509,7 +515,7 @@ function paintFac(){
       <td class="num"><strong>${esc(f.numero)}</strong></td><td>${esc(f.type)}</td>
       <td class="clickable" data-act="openCo" data-id="${f.entrepriseId}">${esc(coName(f.entrepriseId))}</td>
       <td class="num">${fmtDate(f.date)}</td><td class="num r">${fmtEur(f.montant)}</td>
-      <td><select data-chg="factStat" data-id="${f.id}" aria-label="Statut de ${esc(f.numero)}">${STATUT_FAC.map(s=>`<option ${s===f.statut?"selected":""}>${s}</option>`).join("")}</select></td>
+      <td><select data-chg="factStat" data-id="${f.id}" aria-label="Statut de ${esc(f.numero)}">${statutOpts(statutsOf(f),statutNorm(f),isDevisDoc(f))}</select></td>
       <td><div class="inline" style="flex-wrap:nowrap"><button class="btn ghost sm" data-act="printFac" data-id="${f.id}">Imprimer</button><button class="btn danger sm" data-act="delFac" data-id="${f.id}" data-label="Supprimer">Supprimer</button></div></td>
     </tr>`).join("")}</tbody></table></div>`:`<p class="label" style="padding:18px 0">Aucun document ne correspond au filtre.</p>`;
 }
@@ -837,7 +843,7 @@ function facHtml(){
     <label class="f full" id="fa-aff-w"><span class="label">Affaire de l'entreprise (pré-remplit les lignes du devis)</span><select id="fa-aff" data-chg="affPick">${affOptions("")}</select></label>
     <label class="f full" id="fa-dev-w" hidden><span class="label">Devis de l'entreprise (base de la facture) *</span><select id="fa-dev" data-chg="devPick">${devisOptions("")}</select></label>
     <label class="f"><span class="label">Date</span><input id="fa-date" type="date" value="${today()}"></label>
-    <label class="f"><span class="label">Statut</span><select id="fa-statut">${STATUT_FAC.map(s=>`<option>${s}</option>`).join("")}</select></label>
+    <label class="f"><span class="label">Statut</span><select id="fa-statut">${statutOpts(STATUT_DEV,"Brouillon",true)}</select></label>
   </div>
   <div class="sec" id="sec-lignes"><p class="label">Détail de la prestation</p>
     <div class="line line-h"><span class="label">Désignation</span><span class="label">Détail</span><span class="label">Qté</span><span class="label">Prix HT</span><span class="label lm">Montant</span><span></span></div>
@@ -866,6 +872,8 @@ function updTotaux(){
   const type=$("#fa-type").value,isAc=/acompte|solde/i.test(type);
   const pct=type.includes("30")?30:type.includes("70")?70:100;
   const isDev=type==="Devis";
+  const st=$("#fa-statut"),want=isDev?STATUT_DEV:STATUT_FAC;
+  if(st.options.length!==want.length){const cur=st.value;st.innerHTML=statutOpts(want,want.includes(cur)?cur:"Brouillon",isDev)}
   $("#fa-remise").disabled=isAc;
   $("#sec-lignes").hidden=isAc;
   $("#fa-aff-w").hidden=!isDev;
