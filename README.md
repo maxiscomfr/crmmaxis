@@ -36,7 +36,7 @@ Un site Netlify est public : toute personne qui connaît l'adresse peut ouvrir l
 - Demandes du site : onglet « Demandes », connexion par code reçu par email, création de fiche depuis une demande. Les demandes viennent de la table `demandes` du projet Supabase (schéma dans `supabase/schema.sql`).
 - Notifications push sur téléphone (application installée sur l'écran d'accueil) à chaque nouvelle demande : service worker `sw.js` et fonction `supabase/functions/notify-demande`.
 - Icônes : favicon, icône d'application (écran d'accueil iPhone et Android) et manifeste web.
-- Documents : bibliothèque par catégorie, rattachement à une entreprise.
+- Documents : bibliothèque par catégorie, rattachement à une entreprise. Chaque devis et chaque facture y apparaît automatiquement, avec filtres (entreprise, catégorie, statut, montant, période) et tri.
 - Raccourcis : Échap ferme une fiche ; le bouton Thème règle clair, sombre ou automatique.
 
 ## Tests

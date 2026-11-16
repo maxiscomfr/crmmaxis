@@ -203,7 +203,7 @@ const ACCEPT_ARTIFACT=".pdf,.png,.jpg,.jpeg,.webp,.gif,.svg,.mp4,.webm,.woff2,.w
 /* ============ État ============ */
 const S=Object.fromEntries(COLS.map(c=>[c,new Map()]));
 let dbRef=null, assetsRef=null, LOCAL=false, CLOUD=false, view="accueil", modal=null;
-const UI={q:"",fStatut:"",sort:"nom",fqQ:"",fqStat:"",docQ:"",docCat:""};
+const UI={q:"",fStatut:"",sort:"nom",fqQ:"",fqStat:"",docQ:"",docCat:"",docCo:"",docStat:"",docMin:"",docMax:"",docFrom:"",docTo:"",docSort:"date"};
 
 /* ============ Utilitaires ============ */
 const $=s=>document.querySelector(s);
@@ -372,7 +372,7 @@ function applyTheme(){
 /* ============ Rendu ============ */
 const VIEWS={accueil,pipeline,entreprises,demandes,facturation,documents,reglages};
 function render(){
-  const counts={entreprises:S.entreprises.size,facturation:S.factures.size,documents:S.documents.size};
+  const counts={entreprises:S.entreprises.size,facturation:S.factures.size,documents:S.documents.size+S.factures.size};
   document.querySelectorAll(".nav button").forEach(b=>{
     const v=b.dataset.view;
     v===view?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current");
@@ -524,11 +524,18 @@ function paintFac(){
 
 function documents(){
   return `<h1>Documents</h1>
-  <p class="lede">Devis, audits, visuels, charte, CGV, plaquettes. Chaque fichier peut être rattaché à une entreprise.</p>
+  <p class="lede">Tes devis et factures s'ajoutent ici automatiquement. Tu peux aussi y déposer audits, visuels, charte, CGV, plaquettes, rattachés à une entreprise.</p>
   ${uploadBox("")}
-  <div class="toolbar">
-    <div class="f"><label class="label" for="dq">Rechercher</label><input id="dq" type="search" value="${esc(UI.docQ)}" placeholder="Nom du fichier" oninput="UI.docQ=this.value;paintDocs()"></div>
+  <div class="toolbar" style="flex-wrap:wrap">
+    <div class="f"><label class="label" for="dq">Rechercher</label><input id="dq" type="search" value="${esc(UI.docQ)}" placeholder="Entreprise, numéro, nom, montant" oninput="UI.docQ=this.value;paintDocs()"></div>
     <div class="f"><label class="label" for="dc">Catégorie</label><select id="dc" onchange="UI.docCat=this.value;paintDocs()"><option value="">Toutes</option>${CATS_DOC.map(c=>`<option ${c===UI.docCat?"selected":""}>${c}</option>`).join("")}</select></div>
+    <div class="f"><label class="label" for="dco">Entreprise</label><select id="dco" onchange="UI.docCo=this.value;paintDocs()"><option value="">Toutes</option>${byKey(S.entreprises,"nom").map(c=>`<option value="${c.id}" ${c.id===UI.docCo?"selected":""}>${esc(c.nom)}</option>`).join("")}</select></div>
+    <div class="f"><label class="label" for="dst">Statut</label><select id="dst" onchange="UI.docStat=this.value;paintDocs()"><option value="">Tous</option>${STATUT_FAC.map(x=>`<option value="${x}" ${x===UI.docStat?"selected":""}>${x}</option>`).join("")}</select></div>
+    <div class="f"><label class="label" for="dmin">Montant HT min (€)</label><input id="dmin" type="number" min="0" step="1" value="${esc(UI.docMin)}" oninput="UI.docMin=this.value;paintDocs()"></div>
+    <div class="f"><label class="label" for="dmax">Montant HT max (€)</label><input id="dmax" type="number" min="0" step="1" value="${esc(UI.docMax)}" oninput="UI.docMax=this.value;paintDocs()"></div>
+    <div class="f"><label class="label" for="dfrom">Du</label><input id="dfrom" type="date" value="${esc(UI.docFrom)}" onchange="UI.docFrom=this.value;paintDocs()"></div>
+    <div class="f"><label class="label" for="dto">Au</label><input id="dto" type="date" value="${esc(UI.docTo)}" onchange="UI.docTo=this.value;paintDocs()"></div>
+    <div class="f"><label class="label" for="dsort">Trier par</label><select id="dsort" onchange="UI.docSort=this.value;paintDocs()">${[["date","Date, récent d'abord"],["montant","Montant, décroissant"],["montantAsc","Montant, croissant"],["entreprise","Entreprise (A-Z)"]].map(([v,l])=>`<option value="${v}" ${v===UI.docSort?"selected":""}>${l}</option>`).join("")}</select></div>
   </div>
   <div id="docs"></div>`;
 }
@@ -544,15 +551,49 @@ function uploadBox(coId){
     ${assetsRef?"":`<p class="label">Le stockage de fichiers n'est pas disponible dans cette vue.</p>`}
   </div>`;
 }
+/* Devis et factures : ajoutés automatiquement à la liste des documents (toujours à jour, sans doublon) */
+function docsAll(){
+  const gen=[...S.factures.values()].map(f=>{
+    const dev=isDevisDoc(f),p=(f.lignes||[]).map(l=>l.designation).filter(Boolean).join(", ");
+    return{gen:true,id:f.id,nom:f.numero+(p?" — "+p:""),numero:f.numero,categorie:dev?"Devis":"Facture",sousType:f.type,entrepriseId:f.entrepriseId,ajouteLe:f.date,montant:Number(f.montant)||0,statut:statutNorm(f),devis:dev};
+  });
+  return [...S.documents.values(),...gen];
+}
 function paintDocs(){
   const box=$("#docs");if(!box)return;
   const needle=UI.docQ.trim().toLowerCase();
-  const list=byKey(S.documents,"ajouteLe",-1).filter(d=>(!UI.docCat||d.categorie===UI.docCat)&&(!needle||d.nom.toLowerCase().includes(needle)));
-  if(!S.documents.size){box.innerHTML=empty("Aucun document","Ajoute le premier fichier avec le formulaire ci-dessus.");return}
-  box.innerHTML=list.length?`<div class="docs">${list.map(docCard).join("")}</div>`:`<p class="label" style="padding:18px 0">Aucun document ne correspond au filtre.</p>`;
+  const min=UI.docMin===""?null:Number(UI.docMin),max=UI.docMax===""?null:Number(UI.docMax);
+  const money=min!==null||max!==null||UI.docStat;
+  const all=docsAll();
+  const list=all.filter(d=>{
+    if(UI.docCat&&d.categorie!==UI.docCat)return false;
+    if(UI.docCo&&d.entrepriseId!==UI.docCo)return false;
+    if(money&&!d.gen)return false;
+    if(UI.docStat&&d.statut!==UI.docStat)return false;
+    if(min!==null&&d.montant<min)return false;
+    if(max!==null&&d.montant>max)return false;
+    if(UI.docFrom&&(d.ajouteLe||"")<UI.docFrom)return false;
+    if(UI.docTo&&(d.ajouteLe||"")>UI.docTo)return false;
+    if(needle){
+      const hay=[d.nom,d.numero,d.entrepriseId?coName(d.entrepriseId):"",d.gen?String(d.montant).replace(".",","):"",d.gen?String(d.montant):""].join(" ").toLowerCase();
+      if(!hay.includes(needle))return false;
+    }
+    return true;
+  });
+  const cmp={date:(a,b)=>(b.ajouteLe||"")>(a.ajouteLe||"")?1:-1,montant:(a,b)=>(b.montant||0)-(a.montant||0),montantAsc:(a,b)=>(a.montant??Infinity)-(b.montant??Infinity),entreprise:(a,b)=>(a.entrepriseId?coName(a.entrepriseId):"~").localeCompare(b.entrepriseId?coName(b.entrepriseId):"~","fr")}[UI.docSort]||(()=>0);
+  list.sort(cmp);
+  if(!all.length){box.innerHTML=empty("Aucun document","Les devis et factures créés apparaissent ici automatiquement. Ajoute aussi un fichier avec le formulaire ci-dessus.");return}
+  const total=sumBy(list.filter(d=>d.gen),"montant"),nbG=list.filter(d=>d.gen).length;
+  box.innerHTML=(list.length?`<p class="label" style="margin:14px 0 4px">${list.length} document${list.length>1?"s":""}${nbG?` · dont ${nbG} devis/facture${nbG>1?"s":""} pour ${fmtEur(total)} HT`:""}</p><div class="docs">${list.map(docCard).join("")}</div>`:`<p class="label" style="padding:18px 0">Aucun document ne correspond au filtre.</p>`);
 }
 function docCard(d){
   const c=d.entrepriseId?coName(d.entrepriseId):"Interne";
+  if(d.gen)return `<article class="doc">
+    <span class="tag">${esc(d.categorie)}</span>
+    <strong>${esc(d.nom)}</strong>
+    <div class="label">${esc(c)} · ${fmtDate(d.ajouteLe)} · ${esc(statutLabel(d.statut,d.devis))}</div>
+    <div class="num"><strong>${fmtEur(d.montant)}</strong> HT</div>
+    <div class="acts"><button class="btn ghost sm" data-act="printFac" data-id="${d.id}">Ouvrir / imprimer</button></div></article>`;
   return `<article class="doc">
     <span class="tag">${esc(d.categorie)}</span>
     <strong>${esc(d.nom)}</strong>
