@@ -16,9 +16,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Tokens: Encre, Papier, Signal, Béton, Filet (charte MAXIS). */
-:root{--bg:#F4F3EF;--fg:#0A0A0A;--muted:#6B6B66;--line:rgba(46,125,91,.24);--surface:rgba(46,125,91,.095);--hover:rgba(46,125,91,.16);--g:#2E7D5B;--fieldbg:rgba(255,255,255,.62);--accent:#FF4D1A;--accent-fg:#0A0A0A;--shadow:0 1px 0 rgba(10,10,10,.06);color-scheme:light}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0A0A0A;--fg:#F4F3EF;--muted:#8F8F89;--line:rgba(120,200,160,.18);--surface:rgba(90,190,140,.085);--hover:rgba(90,190,140,.15);--g:#4FB387;--fieldbg:rgba(255,255,255,.06);--accent:#FF4D1A;--accent-fg:#0A0A0A;--shadow:none;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#0A0A0A;--fg:#F4F3EF;--muted:#8F8F89;--line:rgba(120,200,160,.18);--surface:rgba(90,190,140,.085);--hover:rgba(90,190,140,.15);--g:#4FB387;--fieldbg:rgba(255,255,255,.06);--accent:#FF4D1A;--accent-fg:#0A0A0A;--shadow:none;color-scheme:dark}
+:root{--bg:#F4F3EF;--fg:#0A0A0A;--muted:#6B6B66;--line:rgba(10,10,10,.11);--surface:rgba(255,255,255,.42);--hover:rgba(255,255,255,.62);--g:rgba(10,10,10,.5);--fieldbg:rgba(255,255,255,.72);--accent:#FF4D1A;--accent-fg:#0A0A0A;--shadow:0 1px 0 rgba(10,10,10,.06);color-scheme:light}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0A0A0A;--fg:#F4F3EF;--muted:#8F8F89;--line:rgba(255,255,255,.12);--surface:rgba(255,255,255,.07);--hover:rgba(255,255,255,.12);--g:rgba(244,243,239,.45);--fieldbg:rgba(255,255,255,.07);--accent:#FF4D1A;--accent-fg:#0A0A0A;--shadow:none;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0A0A0A;--fg:#F4F3EF;--muted:#8F8F89;--line:rgba(255,255,255,.12);--surface:rgba(255,255,255,.07);--hover:rgba(255,255,255,.12);--g:rgba(244,243,239,.45);--fieldbg:rgba(255,255,255,.07);--accent:#FF4D1A;--accent-fg:#0A0A0A;--shadow:none;color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px;min-height:100vh}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -357,7 +357,7 @@ tbody tr.clickable:hover td:first-child,tbody tr:hover td:first-child{box-shadow
 
 /* ===== Fond blanc cassé MAXIS et panneaux en verre vert translucide ===== */
 body::before{content:"";position:fixed;inset:-25vmax;z-index:-1;pointer-events:none;
-  background:radial-gradient(42vmax 42vmax at 10% 6%,rgba(46,125,91,.30),transparent 62%),radial-gradient(38vmax 38vmax at 90% 20%,rgba(255,77,26,.10),transparent 62%),radial-gradient(46vmax 46vmax at 68% 96%,rgba(46,125,91,.24),transparent 62%);
+  background:radial-gradient(42vmax 42vmax at 10% 6%,rgba(10,10,10,.07),transparent 62%),radial-gradient(38vmax 38vmax at 90% 20%,rgba(255,77,26,.06),transparent 62%),radial-gradient(46vmax 46vmax at 68% 96%,rgba(255,255,255,.9),transparent 62%);
   animation:drift 28s ease-in-out infinite alternate}
 @keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(-3vmax,2vmax,0) scale(1.08)}}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) body::before{opacity:.55}}
@@ -370,7 +370,8 @@ body::before{content:"";position:fixed;inset:-25vmax;z-index:-1;pointer-events:n
 .kpi{border-color:var(--line)}
 .col{border-right-color:var(--line)}
 .card,.doc,.dcard,.tile,.chip,.panel,.toolbar{background:var(--surface);border-color:var(--line)}
-.card{box-shadow:0 1px 0 rgba(255,255,255,.4) inset}
+.card,.doc,.dcard,.tile,.panel,.chip{box-shadow:inset 0 1px 0 rgba(255,255,255,.75),0 10px 26px -18px rgba(10,10,10,.28)}
+:root[data-theme="dark"] .card,:root[data-theme="dark"] .doc,:root[data-theme="dark"] .dcard,:root[data-theme="dark"] .tile,:root[data-theme="dark"] .panel,:root[data-theme="dark"] .chip{box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
 .empty{background:var(--surface);border-color:var(--g)}
 .box,.add{background:var(--surface);border-color:var(--line)}
 input,select,textarea{background:var(--fieldbg);border-color:var(--line)}
