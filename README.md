@@ -28,6 +28,7 @@ Un site Netlify est public : toute personne qui connaît l'adresse peut ouvrir l
 ## Fonctionnalités
 
 - Interface aux couleurs MAXIS : barre de navigation en verre dépoli avec pastille Signal animée, recherche rapide (⌘K ou Ctrl K), changement de page en fondu, chiffres qui défilent, apparitions en cascade (désactivées si le système demande moins d'animations).
+- Chaque panneau reprend le même style : pipeline avec cartes à monogramme et glisser-déposer animé, tableaux qui apparaissent en cascade, demandes du site en cartes, statuts colorés pour devis et factures, documents avec filtres, fiche entreprise en tiroir latéral avec raccourcis vers ses sections.
 - Tableau de bord : prochaine action, relances dues, pipeline par étape, tuiles d'accès aux panneaux, encaissé sur 6 mois, taux de conversion.
 - Pipeline en colonnes : glisser-déposer ou changement d'étape depuis la carte.
 - Fiches entreprises : contacts, échanges, affaires, devis et factures, documents.
