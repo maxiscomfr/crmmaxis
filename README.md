@@ -27,7 +27,8 @@ Un site Netlify est public : toute personne qui connaît l'adresse peut ouvrir l
 
 ## Fonctionnalités
 
-- Tableau de bord : relances dues, encaissé sur 6 mois, taux de conversion.
+- Interface aux couleurs MAXIS : barre de navigation en verre dépoli avec pastille Signal animée, recherche rapide (⌘K ou Ctrl K), changement de page en fondu, chiffres qui défilent, apparitions en cascade (désactivées si le système demande moins d'animations).
+- Tableau de bord : prochaine action, relances dues, pipeline par étape, tuiles d'accès aux panneaux, encaissé sur 6 mois, taux de conversion.
 - Pipeline en colonnes : glisser-déposer ou changement d'étape depuis la carte.
 - Fiches entreprises : contacts, échanges, affaires, devis et factures, documents.
 - Devis et factures : numérotation automatique, lignes détaillées (désignation, détail, quantité, prix HT), remise client en pourcentage, impression au format du devis MAXIS. Un devis ne propose que les affaires de l'entreprise choisie. Une facture (acompte 30 %, solde 70 % ou facture complète) se crée obligatoirement à partir d'un devis de l'entreprise : l'acompte et le solde se calculent sur le total HT du devis, la facture complète reprend ses lignes et sa remise.
